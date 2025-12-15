@@ -611,7 +611,7 @@ function Main()
 				-- Image count
 				if adjustRenderRange == true and type(tbl) == "table" and tbl.project and tbl.project.clip and tbl.project.clip["image-count"] then
 					local renderStart = 0
-					local renderEnd = tonumber(tbl.project.clip["image-count"])
+					local renderEnd = tonumber(tbl.project.clip["image-count"]-1) -- render starts at 0
 
 					-- Move the playhead
 					comp.CurrentTime = renderStart
@@ -752,6 +752,43 @@ function Main()
 								ldr.Clip[fu.TIME_UNDEFINED] = ldrFilename
 							end
 						end
+						
+						-- TVPaint Layer behaviours [secondman]
+						local postbehavior = get(groupTbl, "post-behavior")
+						local layerstart = get(groupTbl, "start")
+							--print ("layerstart: "..layerstart)
+						local layerend = get(groupTbl, "end")
+							--print ("layerend: "..layerend)
+						local highestindex = 0
+						
+						for _, link in pairs(groupTbl.link) do
+							currentindex = get(link,"instance-index")
+								--print("currentindex: "..currentindex)
+							if currentindex > highestindex then
+								highestindex = currentindex
+							end
+						end
+						
+						print("highestindex: "..highestindex)
+						
+						-- loops and end holds:
+						
+						ldr.GlobalOut[fu.TIME_UNDEFINED] = layerend
+						ldr.GlobalIn[fu.TIME_UNDEFINED] = layerstart
+						ldr.ClipTimeStart[fu.TIME_UNDEFINED] = 0
+						ldr.ClipTimeEnd[fu.TIME_UNDEFINED] = highestindex - layerstart
+						
+						-- make sure the last frame lasts long enough to fill layerstart -> layerend
+						ldr.HoldLastFrame[fu.TIME_UNDEFINED] = layerend - highestindex
+							--print("holdlastframe: "..layerend - highestindex)
+
+						if postbehavior == 1 then
+							ldr.Loop[fu.TIME_UNDEFINED] = 1
+						elseif postbehavior == 3 then
+							ldr.HoldLastFrame[fu.TIME_UNDEFINED] = 1000000 -- some stupid high value for now, let's make this cleverder
+						end
+						
+						-- TVPaint Layer behaviours end
 
 						-- Save the Loader node to a table
 						table.insert(imgTbl, ldr)
