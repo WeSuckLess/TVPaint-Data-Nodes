@@ -511,6 +511,18 @@ function AskForInput()
 	win:Hide()
 end
 
+-------------------------------------------------------------------------------
+-- Comp Build Funcions
+-------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
 
 function Main()
 	print("[TVPaint] Comp Builder Script")
@@ -605,7 +617,7 @@ function Main()
 				-- Extract the number of clip layers
 				local layer_max = 0
 				if type(tbl) == "table" and tbl.project and tbl.project.clip and tbl.project.clip.layers and type(tbl.project.clip.layers) == "table" then
-					layer_max = tonumber(table.getn(tbl.project.clip.layers)) - 2
+					layer_max = tonumber(table.getn(tbl.project.clip.layers)) -- 2 layers were missing on import
 				end
 
 				-- Image count
@@ -626,7 +638,7 @@ function Main()
 				end
 
 				-- Default layer build order
-				local startLayer = layer_max
+				local startLayer = layer_max 
 				local endLayer = 1
 				local stepBy = -1
 
@@ -656,6 +668,9 @@ function Main()
 					-- Loader Node
 					-- Deselect all nodes
 					comp.CurrentFrame.FlowView:Select() 
+
+
+------------------------------------------------------------------------------- BACKGROUND
 
 					-- Add the Background node
 					if addBackground == true then
@@ -701,6 +716,9 @@ function Main()
 
 						table.insert(imgNameTbl, "bg")
 					end
+
+
+------------------------------------------------------------------------------- LOADERS
 
 					for i = startLayer, endLayer, stepBy do
 						-- Deselect all nodes
@@ -769,7 +787,14 @@ function Main()
 							end
 						end
 						
-						print("highestindex: "..highestindex)
+						--extract Blend modes and insert them in Loader comments
+						local blendmode = get(groupTbl, "blending-mode")
+						local blend = 1 / 255 * get(groupTbl, "opacity")
+						local visible = get(groupTbl, "visible")
+						
+						ldr.Comments[fu.TIME_UNDEFINED] = blendmode.."\n"..blend.."\n"..tostring(visible)
+						
+						--print("highestindex: "..highestindex)
 						
 						-- loops and end holds:
 						
@@ -794,6 +819,8 @@ function Main()
 						table.insert(imgTbl, ldr)
 					end
 
+-------------------------------------------------------------------------------
+
 					-- When adding Merge or Merge3D nodes sort the image table
 					if mergeLoaders == 2 or mergeLoaders == 3 then
 						if direction == 0 then
@@ -806,6 +833,8 @@ function Main()
 							table.sort(imgTbl, function(a,b) return select(1, comp.CurrentFrame.FlowView:GetPos(a)) < select(1, comp.CurrentFrame.FlowView:GetPos(b)) end)
 						end
 					end
+
+------------------------------------------------------------------------------- LIFESAVER
 
 					-- What output node should be used?
 					if mergeLoaders == 0 then
@@ -838,6 +867,9 @@ function Main()
 								ls.AddOutput[fu.TIME_UNDEFINED] = 1
 							end
 						end
+						
+------------------------------------------------------------------------------- MULTIMERGE
+						
 					elseif mergeLoaders == 1 then
 						-- Add a MultiMerge node
 						-- Connect the Loader nodes to a MultiMerge node
@@ -869,10 +901,14 @@ function Main()
 								print(string.format("[%03d][MultiMerge Connection] %30s -> %s", k, tostring(imgTbl[k].Name), tostring(mmrg.Name)  .. ".Layer" .. (k-1)  .. ".Foreground"))
 							end
 						end
+						
+------------------------------------------------------------------------------- MERGES
+						
+						
 					elseif mergeLoaders == 2 then
 						-- Add a Merge node
 						local mrgTbl = {}
-
+						
 						-- Connect the inputs
 						for k,v in pairs(imgTbl) do
 							-- Y axis shift value
@@ -905,8 +941,8 @@ function Main()
 										-- Build horizontal
 										mrg = comp:AddTool("Merge", origin_x + (offsetX * (k - kStepBy)), origin_y + 5)
 									end
-									mrg:ConnectInput("Foreground", mrgTbl[#mrgTbl])
-									mrg:ConnectInput("Background", imgTbl[k])
+									mrg:ConnectInput("Foreground", imgTbl[k-1])
+--									mrg:ConnectInput("Background", imgTbl[k])			-- this one for testing
 								end
 							else
 								-- flip the Merge node fb and bg input order
@@ -939,12 +975,40 @@ function Main()
 								if alphaGain == true then
 									mrg["Gain"][fu.TIME_UNDEFINED] = 0
 								end
+								
+								-- blend modes and opacity [secondman]
+								
+								if string.match(imgTbl[k-1].Comments[fu.TIME_UNDEFINED], 'Color') then 
+									mrg["ApplyMode"][fu.TIME_UNDEFINED] = "Normal"
+								elseif string.match(imgTbl[k-1].Comments[fu.TIME_UNDEFINED], 'Multiply') then 
+									mrg["ApplyMode"][fu.TIME_UNDEFINED] = "Multiply"
+								end
+								if string.match(imgTbl[k-1].Comments[fu.TIME_UNDEFINED], 'true') then 
+									mrg["Blend"][fu.TIME_UNDEFINED] = tonumber(string.match(imgTbl[k-1].Comments[fu.TIME_UNDEFINED], '%d[%d.,]*'))
+								else
+									mrg["Blend"][fu.TIME_UNDEFINED] = 0
+								end
+								
+								--print(string.match(imgTbl[k-1].Comments[fu.TIME_UNDEFINED], '%d[%d.,]*'))
 
 								print(string.format("[%03d][Merge Connection] %30s -> %s", k, tostring(imgTbl[k].Name), tostring(mrg.Name)  .. ".Input" .. (k)))
 
 								table.insert(mrgTbl, mrg)
 							end
 						end
+						
+					for k,v in pairs(mrgTbl) do
+						v:ConnectInput("Background", mrgTbl[k+1])
+					end
+					
+					mrgTbl[#mrgTbl]:ConnectInput("Background", imgTbl[#imgTbl])
+					
+					
+					
+					
+------------------------------------------------------------------------------- MERGE3D
+						
+						
 					elseif mergeLoaders == 3 then
 						-- Add Merge3D nodes
 						local img3DTbl = {}
@@ -1271,6 +1335,11 @@ function Main()
 						end
 					end
 				else
+				
+
+------------------------------------------------------------------------------- ADDING BG NODE
+				
+				
 					-- TVPaint Layer Node
 					-- Add the TVPaintBackground node
 					if addBackground == true then
@@ -1427,6 +1496,9 @@ function Main()
 							end
 						end
 					elseif mergeLoaders == 2 then
+					
+------------------------------------------------------------------------------- ADDING MERGE NODES
+					
 						-- Add a Merge node
 						local mrgTbl = {}
 
